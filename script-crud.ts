@@ -6,6 +6,7 @@ interface Tarefa {
 interface EstadoAplicacao {
     tarefas: Tarefa[]
     tarefaSelecionada: Tarefa | null
+    editando: boolean
 }
 
 let estadoInicial: EstadoAplicacao = {
@@ -23,10 +24,11 @@ let estadoInicial: EstadoAplicacao = {
             concluida: false
         }
     ],
-    tarefaSelecionada: null
+    tarefaSelecionada: null,
+    editando: false
 }
 
-const selecionarTarefa = (estado: EstadoAplicacao, tarefa: Tarefa) : EstadoAplicacao => {
+const selecionarTarefa = (estado: EstadoAplicacao, tarefa: Tarefa): EstadoAplicacao => {
 
     return{
         ...estado,
@@ -34,7 +36,36 @@ const selecionarTarefa = (estado: EstadoAplicacao, tarefa: Tarefa) : EstadoAplic
     }
 }
 
-const atualizarUI = () => {
+const adicionarTarefa = (estado: EstadoAplicacao, tarefa: Tarefa): EstadoAplicacao => {
+    return {
+        ...estado,
+        tarefas: [...estado.tarefas, tarefa]
+    }
+}
+
+const deletar = (estado: EstadoAplicacao): EstadoAplicacao => {
+    if (estado.tarefaSelecionada) {
+        const tarefas = estado.tarefas.filter(t => t != estado.tarefaSelecionada);
+        return { ...estado, tarefas, tarefaSelecionada: null, editando: false };
+    } else {
+        return estado;
+    }
+}
+
+const deletarTodas = (estado: EstadoAplicacao): EstadoAplicacao => {
+    return { ...estado, tarefas: [], tarefaSelecionada: null, editando: false };
+}
+
+const deletarTodasConcluidas = (estado: EstadoAplicacao): EstadoAplicacao => {
+    const tarefas = estado.tarefas.filter(t => !t.concluida);
+    return { ...estado, tarefas, tarefaSelecionada: null, editando: false };
+}
+
+const editarTarefa = (estado: EstadoAplicacao, tarefa: Tarefa): EstadoAplicacao => {
+    return { ...estado, editando: !estado.editando, tarefaSelecionada: tarefa };
+}
+
+   const atualizarUI = () => {
     const taskIconSvg = `
     <svg class="app__section-task-icon-status" width="24" height="24" viewBox="0 0 24 24"
         fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -45,6 +76,64 @@ const atualizarUI = () => {
     </svg>
     `
     const ulTarefas = document.querySelector('.app_section-task-list')
+    const formAdicionarTarefa = document.querySelector<HTMLFormElement>('.app__form-add-task')
+    const btnAdicionarTarefa = document.querySelector<HTMLButtonElement>('.app__button--add-task')
+    const textarea = document.querySelector<HTMLTextAreaElement>('.app__form-textarea')
+    const labelTarefaAtiva = document.querySelector<HTMLParagraphElement>('.app__section-active-task-description')
+    const btnCancelar: HTMLButtonElement = document.querySelector('.app__form-footer__button--cancel') as HTMLButtonElement
+    const btnDeletar: HTMLButtonElement = document.querySelector('.app__form-footer__button--delete') as HTMLButtonElement
+
+    const btnDeletarConcluidas: HTMLButtonElement = document.querySelector('#btn-remover-concluidas') as HTMLButtonElement
+    const btnDeletarTodas: HTMLButtonElement = document.querySelector('#btn-remover-todas') as HTMLButtonElement
+
+    labelTarefaAtiva!.textContent = estadoInicial.tarefaSelecionada ? estadoInicial.tarefaSelecionada.descricao : null
+
+    if (estadoInicial.editando && estadoInicial.tarefaSelecionada) {
+        formAdicionarTarefa!.classList.remove('hidden')
+        textarea!.value = estadoInicial.tarefaSelecionada.descricao
+    } else {
+        formAdicionarTarefa!.classList.add('hidden')
+        textarea!.value = ''
+    }
+
+    if (!btnAdicionarTarefa) {
+        throw Error("O elemento btnAdicionarTarefa não foi encontrado, favor rever.")
+    }
+    
+    btnAdicionarTarefa.onclick = () => {
+        formAdicionarTarefa?.classList.toggle('hidden')
+    }
+
+    formAdicionarTarefa!.onsubmit = (evento) => {
+        evento.preventDefault()
+        const descricao = textarea!.value
+        estadoInicial = adicionarTarefa(estadoInicial, {
+            descricao,
+            concluida: false
+        })
+        atualizarUI()
+    }
+
+    btnCancelar.onclick = () => {
+        formAdicionarTarefa!.classList.add('hidden');
+    }
+
+    btnDeletar.onclick = () => {
+        estadoInicial = deletar(estadoInicial);
+        formAdicionarTarefa!.classList.add('hidden');
+        atualizarUI();
+    }
+
+    btnDeletarConcluidas.onclick = () => {
+        estadoInicial = deletarTodasConcluidas(estadoInicial);
+        atualizarUI();
+    }
+
+    btnDeletarTodas.onclick = () => {
+        estadoInicial = deletarTodas(estadoInicial);
+        atualizarUI();
+    }
+
     if (ulTarefas) {
         ulTarefas.innerHTML = ''
     }
@@ -55,11 +144,9 @@ const atualizarUI = () => {
         const svgIcon = document.createElement('svg')
         svgIcon.innerHTML = taskIconSvg
 
-
         const paragraph = document.createElement('p')
         paragraph.classList.add('app__section-task-list-item-description')
         paragraph.textContent = tarefa.descricao
-
 
         const button = document.createElement('button')
         button.classList.add('app_button-edit')
@@ -74,10 +161,27 @@ const atualizarUI = () => {
             li.classList.add('app__section-task-list-item-complete')
         }
 
+        if (tarefa == estadoInicial.tarefaSelecionada) {
+            li.classList.add('app__section-task-list-item-active')
+        }
+
         li.appendChild(svgIcon)
         li.appendChild(paragraph)
         li.appendChild(button)
 
+        li.addEventListener('click', () => {
+            estadoInicial = selecionarTarefa(estadoInicial, tarefa)
+            atualizarUI()
+        })
+
+        editIcon.onclick = (evento) => {
+            evento.stopPropagation();
+            estadoInicial = editarTarefa(estadoInicial, tarefa);
+            atualizarUI();
+        }
+
         ulTarefas?.appendChild(li)
     })    
 }
+
+atualizarUI()
